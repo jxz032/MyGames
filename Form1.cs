@@ -153,10 +153,11 @@ namespace MultiThreading
 
                 if (x_arr.Count() >= 5)
                 {
-                    //thX = new Thread(unused => Compare(x_arr, ref xCheck));
-                    //thX.Start();
+                    thX = new Thread(unused => Compare(x_arr, ref xCheck));
+                    thX.Name = "thread_CompareX";
+                    thX.Start();
 
-                    Compare(x_arr, ref xCheck);
+                    //   Compare(x_arr, ref xCheck);
                     if (xCheck)
                     {
                         break;
@@ -165,10 +166,11 @@ namespace MultiThreading
 
                 if (y_arr.Count() >= 5)
                 {
-                    //thY = new Thread(unused => Compare(y_arr, ref yCheck));
-                    //thY.Start();
+                    thY = new Thread(unused => Compare(y_arr, ref yCheck));
+                    thY.Name = "thread_CompareY";
+                    thY.Start();
 
-                    Compare(y_arr, ref yCheck);
+                    // Compare(y_arr, ref yCheck);
 
                     if (yCheck)
                     {
@@ -180,10 +182,11 @@ namespace MultiThreading
                 {
                     if (xy_arrUp.Count() >= 5)
                     {
-                        //thXy = new Thread(unused => CompareXY(xy_arrUp, ref xyCheck));
-                        //thXy.Start();
+                        thXy = new Thread(unused => CompareXY(xy_arrUp, ref xyCheck));
+                        thXy.Name = "thread_CompareXY";
+                        thXy.Start();
 
-                        CompareXY(xy_arrUp, ref xyCheck);
+                        // CompareXY(xy_arrUp, ref xyCheck);
                         if (xyCheck)
                         {
                             break;
@@ -191,9 +194,9 @@ namespace MultiThreading
                     }
                     else if (xy_arrDown.Count() >= 5)
                     {
-                        //thXy = new Thread(unused => CompareXY(xy_arrDown, ref xyCheck));
-                        //thXy.Start();
-                        CompareXY(xy_arrDown, ref xyCheck);
+                        thXy = new Thread(unused => CompareXY(xy_arrDown, ref xyCheck));
+                        thXy.Start();
+                        // CompareXY(xy_arrDown, ref xyCheck);
                         if (xyCheck)
                         {
                             break;
@@ -255,7 +258,7 @@ namespace MultiThreading
 
                     routePoint = (chests[index].Location_X != chests[routePoint].Location_X
                         && (chests[index].Location_X - chests[routePoint].Location_X >= 1)
-                          &&       chests[index].Location_Y != chests[routePoint].Location_Y)
+                          && chests[index].Location_Y != chests[routePoint].Location_Y)
                         ? index
                         : routePoint;
 
@@ -269,12 +272,12 @@ namespace MultiThreading
                         stepXDiff = chests[routeQueue.LastOrDefault()].Location_X -
                                     chests[routeQueue.Peek()].Location_X;
 
-                        if (Math.Abs(stepYDiff) == 1)
+                        if (Math.Abs(stepYDiff) == 1 && Math.Abs(stepXDiff) == 1)
                         {
                             lastStepDirection = stepYDiff;
 
                             count = (lastStepDirection == 0 || lastStepDirection == stepYDiff) ? count - 1 : 3;
-                            
+
                             if (count == 0)
                             {
                                 isWin = true;
@@ -300,6 +303,7 @@ namespace MultiThreading
             redChestStore = new List<Chest>();
             gameOver = false;
             lblColor.BackColor = Color.Red;
+            lblColor.Text = "RED";
             #region Draw canvas
             this.Size = new Size(canvasSize, canvasSize);
 
@@ -335,50 +339,38 @@ namespace MultiThreading
             this.CreateGraphics().FillEllipse(solidBrush, new Rectangle(x + initPositionOffset, y + initPositionOffset, 30, 30));
         }
 
+        private void eraseSolidCircle(int x, int y)
+        {
+            SolidBrush solidBrush = new SolidBrush(this.BackColor);
+
+            this.CreateGraphics().FillEllipse(solidBrush, new Rectangle(x + initPositionOffset, y + initPositionOffset, 30, 30));
+
+            Point startPointX = new Point(x + initPositionOffset, y + initPositionOffset + chestSize / 2);
+            Point endPointX = new Point(x + initPositionOffset + chestSize, y + initPositionOffset + chestSize / 2);
+            this.CreateGraphics().DrawLine(new Pen(Brushes.Black, 2), startPointX, endPointX);
+
+            Point startPointY = new Point(x + initPositionOffset + chestSize / 2, y + initPositionOffset);
+            Point endPointY = new Point(x + initPositionOffset + chestSize / 2, y + initPositionOffset + chestSize);
+            this.CreateGraphics().DrawLine(new Pen(Brushes.Black, 2), startPointY, endPointY);
+        }
+
         #endregion
-    }
 
-    public class Chest
-    {
-        public int Location_X { get; set; }
-        public int Location_Y { get; set; }
-
-    }
-
-    public class FixSizeQueue<T> : Queue<T>
-    {
-        public int Limit { get; set; }
-
-        public FixSizeQueue(int size)
+        private void btnRegret_Click(object sender, EventArgs e)
         {
-            this.Limit = size;
-        }
+            Chest newAddedChest;
+            List<Chest> store = redTurn ? blueChestStore : redChestStore;
 
-        public new void Enqueue(T item)
-        {
-            if (this.Count >= this.Limit)
+            if (store.Count > 0)
             {
-                this.Dequeue();
+                newAddedChest = store[store.Count - 1];
+                store.RemoveAt(store.Count - 1);
+                int chestX = newAddedChest.Location_X * pace - chestSize / 2;
+                int chestY = newAddedChest.Location_Y * pace - chestSize / 2;
+                eraseSolidCircle(chestX, chestY);
+                SwitchTurn();
             }
-
-            base.Enqueue(item);
         }
-    }
 
-    public static class StopwatchExt
-    {
-        public static string GetTimeString(this Stopwatch stopwatch, int numberofDigits = 1)
-        {
-            double time = stopwatch.ElapsedTicks / (double)Stopwatch.Frequency;
-            if (time > 1)
-                return Math.Round(time, numberofDigits) + " s";
-            if (time > 1e-3)
-                return Math.Round(1e3 * time, numberofDigits) + " ms";
-            if (time > 1e-6)
-                return Math.Round(1e6 * time, numberofDigits) + " µs";
-            if (time > 1e-9)
-                return Math.Round(1e9 * time, numberofDigits) + " ns";
-            return stopwatch.ElapsedTicks + " ticks";
-        }
     }
 }
