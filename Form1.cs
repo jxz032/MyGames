@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Text;
@@ -13,16 +14,12 @@ namespace MultiThreading
 {
     public partial class Form1 : Form
     {
-
-        private Thread threadRed;
-        private Thread threadBlue;
-
         private int initPositionOffset = 200;
         private int pace = 50;
         private int canvasSize = 1000;
         private int chestSize = 30;
         private bool redTurn;
-        private bool gameOver;
+        private static bool gameOver;
         private static List<Chest> blueChestStore;
         private static List<Chest> redChestStore;
 
@@ -39,7 +36,8 @@ namespace MultiThreading
 
         private void Form1_Load(object sender, EventArgs e)
         {
-
+            lblColor.BackColor = Color.Red;
+            lblColor.Text = "RED";
         }
 
         private void Form1_MouseClick(object sender, MouseEventArgs e)
@@ -51,20 +49,20 @@ namespace MultiThreading
                 int x = e.Location.X - initPositionOffset;
                 int y = e.Location.Y - initPositionOffset;
 
-                int xLoc = x/pace;
-                int xOffset = x%pace;
-                int yLoc = y/pace;
-                int yOffset = y%pace;
+                int xLoc = x / pace;
+                int xOffset = x % pace;
+                int yLoc = y / pace;
+                int yOffset = y % pace;
 
-                xLoc = (xOffset > pace/2) ? xLoc + 1 : xLoc;
-                yLoc = (yOffset > pace/2) ? yLoc + 1 : yLoc;
+                xLoc = (xOffset > pace / 2) ? xLoc + 1 : xLoc;
+                yLoc = (yOffset > pace / 2) ? yLoc + 1 : yLoc;
 
                 bool isChestExist = redChestStore.Any(c => c.Location_X == xLoc && c.Location_Y == yLoc) ||
                                     blueChestStore.Any(c => c.Location_X == xLoc && c.Location_Y == yLoc);
 
                 if (!isChestExist)
                 {
-                    Chest newChest = new Chest {Location_X = xLoc, Location_Y = yLoc};
+                    Chest newChest = new Chest { Location_X = xLoc, Location_Y = yLoc };
 
                     if (redTurn)
                     {
@@ -75,8 +73,8 @@ namespace MultiThreading
                         blueChestStore.Add(newChest);
                     }
 
-                    int chestX = xLoc*pace - chestSize/2;
-                    int chestY = yLoc*pace - chestSize/2;
+                    int chestX = xLoc * pace - chestSize / 2;
+                    int chestY = yLoc * pace - chestSize / 2;
 
                     PaintSolidCircle(chestX, chestY, redTurn);
 
@@ -117,7 +115,7 @@ namespace MultiThreading
                     InitGame();
                 }
             }
-            
+
         }
 
         #endregion Events
@@ -126,6 +124,8 @@ namespace MultiThreading
 
         private bool Judge(List<Chest> chests)
         {
+            Stopwatch watch = Stopwatch.StartNew();
+
             bool xCheck = false;
             bool yCheck = false;
             bool xyCheck = false;
@@ -149,9 +149,14 @@ namespace MultiThreading
                 Chest[] xy_arrDown = xy_arr.Where(c => (c.Location_X == targetHorizon && c.Location_Y == targetVertical) || c.Location_Y > targetVertical).OrderBy(c => c.Location_Y).ToArray();
                 Chest[] xy_arrUp = xy_arr.Where(c => (c.Location_X == targetHorizon && c.Location_Y == targetVertical) || c.Location_Y < targetVertical).OrderByDescending(c => c.Location_Y).ToArray();
 
+                Thread thX, thY, thXy;
+
                 if (x_arr.Count() >= 5)
                 {
-                    xCheck = Compare(x_arr, ref xCheck);
+                    //thX = new Thread(unused => Compare(x_arr, ref xCheck));
+                    //thX.Start();
+
+                    Compare(x_arr, ref xCheck);
                     if (xCheck)
                     {
                         break;
@@ -160,7 +165,10 @@ namespace MultiThreading
 
                 if (y_arr.Count() >= 5)
                 {
-                    yCheck = Compare(y_arr, ref yCheck);
+                    //thY = new Thread(unused => Compare(y_arr, ref yCheck));
+                    //thY.Start();
+
+                    Compare(y_arr, ref yCheck);
 
                     if (yCheck)
                     {
@@ -172,7 +180,10 @@ namespace MultiThreading
                 {
                     if (xy_arrUp.Count() >= 5)
                     {
-                        xyCheck = CompareXY(xy_arrUp, ref xyCheck);
+                        //thXy = new Thread(unused => CompareXY(xy_arrUp, ref xyCheck));
+                        //thXy.Start();
+
+                        CompareXY(xy_arrUp, ref xyCheck);
                         if (xyCheck)
                         {
                             break;
@@ -180,7 +191,9 @@ namespace MultiThreading
                     }
                     else if (xy_arrDown.Count() >= 5)
                     {
-                        xyCheck = CompareXY(xy_arrDown, ref xyCheck);
+                        //thXy = new Thread(unused => CompareXY(xy_arrDown, ref xyCheck));
+                        //thXy.Start();
+                        CompareXY(xy_arrDown, ref xyCheck);
                         if (xyCheck)
                         {
                             break;
@@ -190,6 +203,10 @@ namespace MultiThreading
 
                 mainLoop++;
             }
+
+            watch.Stop();
+
+            Debug.WriteLine("TIME - " + watch.GetTimeString());
             return xCheck || yCheck || xyCheck;
         }
 
@@ -225,7 +242,7 @@ namespace MultiThreading
             if (chests.Count() >= 5)
             {
                 int count = 4;
-                int lastStepDirection = 0; // 1 up, -1 down, 0 invalid
+                int lastStepDirection = 0; // 0 init, -1 up, 1 down
 
                 int routePoint = 0;
                 FixSizeQueue<int> routeQueue = new FixSizeQueue<int>(2);
@@ -234,9 +251,11 @@ namespace MultiThreading
                 for (int index = 1; index < chests.Count(); index++)
                 {
                     int stepYDiff = 0;
+                    int stepXDiff = 0;
 
-                    routePoint = (chests[index].Location_X != chests[routePoint].Location_X &&
-                                 chests[index].Location_Y != chests[routePoint].Location_Y)
+                    routePoint = (chests[index].Location_X != chests[routePoint].Location_X
+                        && (chests[index].Location_X - chests[routePoint].Location_X >= 1)
+                          &&       chests[index].Location_Y != chests[routePoint].Location_Y)
                         ? index
                         : routePoint;
 
@@ -247,11 +266,15 @@ namespace MultiThreading
                         stepYDiff = chests[routeQueue.LastOrDefault()].Location_Y -
                                     chests[routeQueue.Peek()].Location_Y;
 
+                        stepXDiff = chests[routeQueue.LastOrDefault()].Location_X -
+                                    chests[routeQueue.Peek()].Location_X;
+
                         if (Math.Abs(stepYDiff) == 1)
                         {
-                            count = (lastStepDirection == 0 || lastStepDirection == stepYDiff) ? count - 1 : 3;
                             lastStepDirection = stepYDiff;
 
+                            count = (lastStepDirection == 0 || lastStepDirection == stepYDiff) ? count - 1 : 3;
+                            
                             if (count == 0)
                             {
                                 isWin = true;
@@ -275,7 +298,8 @@ namespace MultiThreading
             redTurn = true;
             blueChestStore = new List<Chest>();
             redChestStore = new List<Chest>();
-
+            gameOver = false;
+            lblColor.BackColor = Color.Red;
             #region Draw canvas
             this.Size = new Size(canvasSize, canvasSize);
 
@@ -300,6 +324,8 @@ namespace MultiThreading
         private void SwitchTurn()
         {
             redTurn = !redTurn;
+            lblColor.BackColor = redTurn ? Color.Red : Color.Blue;
+            lblColor.Text = redTurn ? "RED" : "BLUE";
         }
 
         private void PaintSolidCircle(int x, int y, bool isRedTurn)
@@ -310,8 +336,6 @@ namespace MultiThreading
         }
 
         #endregion
-
-
     }
 
     public class Chest
@@ -338,6 +362,23 @@ namespace MultiThreading
             }
 
             base.Enqueue(item);
+        }
+    }
+
+    public static class StopwatchExt
+    {
+        public static string GetTimeString(this Stopwatch stopwatch, int numberofDigits = 1)
+        {
+            double time = stopwatch.ElapsedTicks / (double)Stopwatch.Frequency;
+            if (time > 1)
+                return Math.Round(time, numberofDigits) + " s";
+            if (time > 1e-3)
+                return Math.Round(1e3 * time, numberofDigits) + " ms";
+            if (time > 1e-6)
+                return Math.Round(1e6 * time, numberofDigits) + " µs";
+            if (time > 1e-9)
+                return Math.Round(1e9 * time, numberofDigits) + " ns";
+            return stopwatch.ElapsedTicks + " ticks";
         }
     }
 }
