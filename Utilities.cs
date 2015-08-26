@@ -36,6 +36,12 @@ namespace MultiThreading
 
     }
 
+    public class BreakPointInfo
+    {
+        public int Index { get; set; }
+        public int ProcessedCount { get; set; }
+        public Chest SuggestChest { get; set; }
+    }
     public class FixSizeQueue<T> : Queue<T>
     {
         public int Limit { get; set; }
