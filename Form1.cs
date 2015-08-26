@@ -4,7 +4,9 @@ using System.ComponentModel;
 using System.Data;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
+using System.Runtime.Remoting.Channels;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -18,7 +20,7 @@ namespace MultiThreading
         private int initPositionOffset = 200;
         private int pace = 50;
         private int canvasSize = 1000;
-        private int chestSize = 30;
+        private int chestSize = 50;
         private bool redTurn;
         private static bool gameOver;
         private static bool playWithComputer;
@@ -42,8 +44,6 @@ namespace MultiThreading
         private void button1_Click(object sender, EventArgs e)
         {
             InitGame();
-
-            playWithComputer = chbOnePlayer.Checked;
         }
 
         private void btnRegret_Click(object sender, EventArgs e)
@@ -57,15 +57,14 @@ namespace MultiThreading
                 store.RemoveAt(store.Count - 1);
                 int chestX = newAddedChest.Location_X * pace - chestSize / 2;
                 int chestY = newAddedChest.Location_Y * pace - chestSize / 2;
-                EraseSolidCircle(chestX, chestY);
+                EraseChest(chestX, chestY);
                 SwitchTurn();
             }
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            lblColor.BackColor = Color.Red;
-            lblColor.Text = "RED";
+            
         }
 
         private void Form1_MouseClick(object sender, MouseEventArgs e)
@@ -73,6 +72,7 @@ namespace MultiThreading
             if (gameOver == false)
             {
                 chbOnePlayer.Enabled = false;
+                playWithComputer = chbOnePlayer.Checked;
 
                 int x = e.Location.X - initPositionOffset;
                 int y = e.Location.Y - initPositionOffset;
@@ -137,7 +137,7 @@ namespace MultiThreading
                 int chestX = xLoc * pace - chestSize / 2;
                 int chestY = yLoc * pace - chestSize / 2;
 
-                PaintSolidCircle(chestX, chestY, redTurn);
+                PaintChest(chestX, chestY, redTurn);
 
                 if (redChestStore.Count >= numToWin && redTurn)
                 {
@@ -718,15 +718,14 @@ namespace MultiThreading
         private void InitGame()
         {
             chbOnePlayer.Enabled = true;
+            
             btnRegret.Enabled = true;
-            lblColor.Visible = true;
             this.CreateGraphics().Clear(this.BackColor);
             redTurn = true;
             blueChestStore = new List<Chest>();
             redChestStore = new List<Chest>();
             gameOver = false;
-            lblColor.BackColor = Color.Red;
-            lblColor.Text = "RED";
+
             #region Draw canvas
             this.Size = new Size(canvasSize, canvasSize);
 
@@ -751,22 +750,28 @@ namespace MultiThreading
         private void SwitchTurn()
         {
             redTurn = !redTurn;
-            lblColor.BackColor = redTurn ? Color.Red : Color.Blue;
-            lblColor.Text = redTurn ? "RED" : "BLUE";
+
+            SolidBrush solidBrush = new SolidBrush(this.BackColor);
+            this.CreateGraphics().FillRectangle(solidBrush, new Rectangle(400 + initPositionOffset, -180 + initPositionOffset, chestSize, chestSize));
+            PaintChest(400, -180, redTurn);
         }
 
-        private void PaintSolidCircle(int x, int y, bool isRedTurn)
+        private void PaintChest(int x, int y, bool isRedTurn)
         {
-            SolidBrush solidBrush = isRedTurn ? new SolidBrush(Color.Red) : new SolidBrush(Color.Blue);
+           // SolidBrush solidBrush = isRedTurn ? new SolidBrush(Color.Red) : new SolidBrush(Color.Blue);
+         //   this.CreateGraphics().FillEllipse(solidBrush, rect);
 
-            this.CreateGraphics().FillEllipse(solidBrush, new Rectangle(x + initPositionOffset, y + initPositionOffset, 30, 30));
+            Rectangle rect = new Rectangle(x + initPositionOffset, y + initPositionOffset, chestSize, chestSize);
+            Graphics gfx = this.CreateGraphics();
+            Icon newIcon = isRedTurn ? new Icon(Directory.GetCurrentDirectory() + @"..\..\..\img\furRed.ico") : new Icon(Directory.GetCurrentDirectory() + @"..\..\..\img\catBlue.ico");
+            gfx.DrawIcon(newIcon, rect);
         }
 
-        private void EraseSolidCircle(int x, int y)
+        private void EraseChest(int x, int y)
         {
             SolidBrush solidBrush = new SolidBrush(this.BackColor);
 
-            this.CreateGraphics().FillEllipse(solidBrush, new Rectangle(x + initPositionOffset, y + initPositionOffset, 30, 30));
+            this.CreateGraphics().FillEllipse(solidBrush, new Rectangle(x + initPositionOffset, y + initPositionOffset, chestSize, chestSize));
 
             Point startPointX = new Point(x + initPositionOffset, y + initPositionOffset + chestSize / 2);
             Point endPointX = new Point(x + initPositionOffset + chestSize, y + initPositionOffset + chestSize / 2);
