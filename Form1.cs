@@ -64,7 +64,7 @@ namespace MultiThreading
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            
+            chbOnePlayer.Checked = true;
         }
 
         private void Form1_MouseClick(object sender, MouseEventArgs e)
@@ -173,11 +173,12 @@ namespace MultiThreading
             return false;
         }
 
-        private List<Chest> Judge(List<Chest> chestsStore, int numToCheck, ref bool isWin)
+        private CompareResult Judge(List<Chest> chestsStore, int numToCheck, ref bool isWin)
         {
             Stopwatch watch = Stopwatch.StartNew();
 
-            List<Chest> suggestedChest = new List<Chest>();
+            // List<Chest> suggestedChests = new List<Chest>();
+            CompareResult finalResult = new CompareResult();
 
             int targetHorizon, targetVertical;
 
@@ -191,11 +192,11 @@ namespace MultiThreading
                 targetHorizon = horizonSort.ToArray()[mainLoop].Location_X;
                 targetVertical = horizonSort.ToArray()[mainLoop].Location_Y;
 
-                suggestedChest = JudgeSingleNode(chestsStore, horizonSort, verticalSort, numToCheck, targetHorizon, targetVertical, ref isWin);
+                finalResult = JudgeSingleNode(chestsStore, horizonSort, verticalSort, numToCheck, targetHorizon, targetVertical, ref isWin);
 
-                if (isWin)
+                if (isWin && finalResult.SuggestedChests.Count != 0)
                 {
-                    return suggestedChest;
+                    return finalResult;
                 }
                 mainLoop++;
             }//while
@@ -204,10 +205,10 @@ namespace MultiThreading
 
             Debug.WriteLine("TIME - " + watch.GetTimeString());
 
-            return suggestedChest;
+            return finalResult;
         }
 
-        private List<Chest> JudgeSingleNode(List<Chest> chestsStore, IEnumerable<Chest> horizonSort, IEnumerable<Chest> verticalSort, int numToAlert, int targetHorizon, int targetVertical, ref bool isWin)
+        private CompareResult JudgeSingleNode(List<Chest> chestsStore, IEnumerable<Chest> horizonSort, IEnumerable<Chest> verticalSort, int numToAlert, int targetHorizon, int targetVertical, ref bool isWin)
         {
             #region local variables
             bool xCheck = false;
@@ -222,10 +223,12 @@ namespace MultiThreading
             Chest tempChestLeft = new Chest();
             Chest tempChestRight = new Chest();
 
-            BreakPointInfo breakPointX = new BreakPointInfo();
-            BreakPointInfo breakPointY = new BreakPointInfo();
-            BreakPointInfo breakPointXy = new BreakPointInfo();
-            bool isPosAvail;
+            CompareResult compareResultX = new CompareResult();
+            CompareResult compareResultY = new CompareResult();
+            CompareResult compareResultXy = new CompareResult();
+            CompareResult finalResult = new CompareResult();
+
+            bool isPosAvail, isPosAvailLeft, isPosAvailRight;
 
             Chest[] x_arr = horizonSort.Where(c => c.Location_Y == targetVertical).ToArray();
             Chest[] y_arr = verticalSort.Where(c => c.Location_X == targetHorizon).ToArray();
@@ -265,19 +268,15 @@ namespace MultiThreading
                 //thX.Name = "thread_CompareX";
                 //thX.Start();
 
-                breakPointX = Compare(x_arr, numToAlert, ref xCheck);
+                compareResultX = Compare(x_arr, numToAlert, ref xCheck);
 
-                #region if xx0x
+                #region if xx0x or four in row
 
-                if (breakPointX.ProcessedCount > 2 && breakPointX.SuggestChest != null)
+                if (compareResultX.SuggestedChests.Count != 0)
                 {
-                    chestOnEdgeX.Add(breakPointX.SuggestChest);
+                    chestOnEdgeX = compareResultX.SuggestedChests;
                 }
-
-                #endregion
-
-                #region if 3 in row
-                if (xCheck)
+                else if (xCheck)
                 {
                     tempChestLeft = new Chest
                     {
@@ -289,22 +288,27 @@ namespace MultiThreading
                         Location_X = x_arr[x_arr.Count() - 1].Location_X + 1,
                         Location_Y = targetVertical
                     };
-                    isPosAvail = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(),
+                    isPosAvailLeft = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(),
                        tempChestLeft.Location_X, tempChestLeft.Location_Y);
 
-                    if (isPosAvail)
+                    isPosAvailRight = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(),
+                        tempChestRight.Location_X, tempChestRight.Location_Y);
+
+                    if (isPosAvailLeft && isPosAvailRight && numToAlert >= 3)
+                    {
+                        tempChestLeft.HighRecommand = true;
+                        tempChestRight.HighRecommand = true;
+                    }
+
+                    if (isPosAvailLeft)
                     {
                         chestOnEdgeX.Add(tempChestLeft);
                     }
 
-                    isPosAvail = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(),
-                        tempChestRight.Location_X, tempChestRight.Location_Y);
-
-                    if (isPosAvail)
+                    if (isPosAvailRight)
                     {
                         chestOnEdgeX.Add(tempChestRight);
                     }
-
                 }
                 #endregion
             }
@@ -317,13 +321,13 @@ namespace MultiThreading
                 //thY.Name = "thread_CompareY";
                 //thY.Start();
 
-                breakPointY = Compare(y_arr, numToAlert, ref yCheck);
+                compareResultY = Compare(y_arr, numToAlert, ref yCheck);
 
                 #region if xx0x
 
-                if (breakPointY.ProcessedCount > 2 && breakPointY.SuggestChest != null)
+                if (compareResultY.SuggestedChests.Count != 0)
                 {
-                    chestOnEdgeY.Add(breakPointY.SuggestChest);
+                    chestOnEdgeY = compareResultY.SuggestedChests;
                 }
 
                 #endregion
@@ -332,16 +336,21 @@ namespace MultiThreading
                 {
                     tempChestLeft = new Chest { Location_X = targetHorizon, Location_Y = y_arr[0].Location_Y - 1 };
                     tempChestRight = new Chest { Location_X = targetHorizon, Location_Y = y_arr[y_arr.Count() - 1].Location_Y + 1 };
-                    isPosAvail = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), tempChestLeft.Location_X, tempChestLeft.Location_Y);
+                    isPosAvailLeft = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), tempChestLeft.Location_X, tempChestLeft.Location_Y);
+                    isPosAvailRight = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), tempChestRight.Location_X, tempChestRight.Location_Y);
 
-                    if (isPosAvail)
+                    if (isPosAvailLeft && isPosAvailRight && numToAlert >= 3)
+                    {
+                        tempChestLeft.HighRecommand = true;
+                        tempChestRight.HighRecommand = true;
+                    }
+
+                    if (isPosAvailLeft)
                     {
                         chestOnEdgeY.Add(tempChestLeft);
                     }
 
-                    isPosAvail = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), tempChestRight.Location_X, tempChestRight.Location_Y);
-
-                    if (isPosAvail)
+                    if (isPosAvailRight)
                     {
                         chestOnEdgeY.Add(tempChestRight);
                     }
@@ -369,14 +378,12 @@ namespace MultiThreading
             //thXy.Name = "thread_CompareXY";
             //thXy.Start();
 
-            breakPointXy = CompareXY(xy_arrCheck, numToAlert, ref xyCheck);
+            compareResultXy = CompareXY(xy_arrCheck, numToAlert, ref xyCheck);
 
             #region if xx0x
 
-            if (breakPointXy.ProcessedCount > 2 && breakPointXy.SuggestChest != null)
-            {
-                chestOnEdgeXy.Add(breakPointXy.SuggestChest);
-            }
+            if (compareResultXy.SuggestedChests.Count != 0)
+                chestOnEdgeXy = compareResultXy.SuggestedChests;
 
             #endregion
 
@@ -423,35 +430,44 @@ namespace MultiThreading
                             Location_X = xy_arrCheck[0].Location_X - 1,
                             Location_Y = xy_arrCheck[0].Location_Y + 1
                         };
-                        isPosAvail = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), tempChestRight.Location_X, tempChestRight.Location_Y);
+                        isPosAvailLeft = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), tempChestRight.Location_X, tempChestRight.Location_Y);
+                        isPosAvailRight = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), tempChestLeft.Location_X, tempChestLeft.Location_Y);
 
-                        if (isPosAvail)
+                        if (isPosAvailLeft && isPosAvailRight && numToAlert >= 3)
+                        {
+                            tempChestLeft.HighRecommand = true;
+                            tempChestRight.HighRecommand = true;
+                        }
+
+                        if (isPosAvailLeft)
                         {
                             chestOnEdgeXy.Add(tempChestRight);
                         }
 
-                        isPosAvail = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), tempChestLeft.Location_X, tempChestLeft.Location_Y);
-
-                        if (isPosAvail)
+                        if (isPosAvailRight)
                         {
                             chestOnEdgeXy.Add(tempChestLeft);
                         }
+
                         break;
                 }
             }
 
             #endregion XY
 
-            if (chestOnEdgeX.Count == 1 && breakPointX.SuggestChest == null && breakPointX.ProcessedCount != 4) chestOnEdgeX = new List<Chest>();
+            if (chestOnEdgeX.Count == 1 && compareResultX.NumInRow > 4 && compareResultX.SuggestedChests.Count == 0) chestOnEdgeX = new List<Chest>();
 
-            if (chestOnEdgeY.Count == 1 && breakPointY.SuggestChest == null && breakPointY.ProcessedCount != 4) chestOnEdgeY = new List<Chest>();
+            if (chestOnEdgeY.Count == 1 && compareResultY.NumInRow > 4 && compareResultY.SuggestedChests.Count == 0) chestOnEdgeY = new List<Chest>();
 
-            if (chestOnEdgeXy.Count == 1 && breakPointXy.SuggestChest == null && breakPointXy.ProcessedCount != 4) chestOnEdgeXy = new List<Chest>();
+            if (chestOnEdgeXy.Count == 1 && compareResultXy.NumInRow > 4 && compareResultXy.SuggestedChests.Count == 0) chestOnEdgeXy = new List<Chest>();
 
             chestOnEdge = chestOnEdgeX.Concat(chestOnEdgeY).Concat(chestOnEdgeXy).ToList();
 
+            finalResult.NumInRow = Math.Max(Math.Max(compareResultX.NumInRow, compareResultY.NumInRow), compareResultXy.NumInRow);
+            finalResult.SuggestedChests = chestOnEdge;
             isWin = xCheck || yCheck || xyCheck;
-            return chestOnEdge;
+
+            return finalResult;
         }
 
         private Chest FindAvailablePosition(Chest chest)
@@ -483,16 +499,17 @@ namespace MultiThreading
             IEnumerable<Chest> verticalSort = redChestStore.OrderBy(x => x.Location_Y);
 
             bool isWin = false;
+
             bool isBlue2InRow = false;
             bool isBlue3InRow = false;
 
-            List<Chest> redResult = JudgeSingleNode(redChestStore, horizonSort, verticalSort, numToAlert, targetHorizon,
+            CompareResult redResult = JudgeSingleNode(redChestStore, horizonSort, verticalSort, numToAlert, targetHorizon,
                 targetVertical, ref isWin);
+            CompareResult red3InRowResult = Judge(redChestStore, 3, ref isWin);
+            List<Chest> blue3InRowResult = Judge(blueChestStore, 3, ref isBlue3InRow).SuggestedChests;
+            List<Chest> blue2InRowResult = Judge(blueChestStore, 2, ref isBlue2InRow).SuggestedChests;
 
-            List<Chest> blue3InRowResult = Judge(blueChestStore, 3, ref isBlue3InRow);
-            List<Chest> blue2InRowResult = Judge(blueChestStore, 2, ref isBlue2InRow);
-
-            if (redResult.Count == 0) //If red is still ok, put BLUE in an random position close to previos RED
+            if (redResult.SuggestedChests.Count == 0 && red3InRowResult.SuggestedChests.Count == 0 && !red3InRowResult.SuggestedChests.Any(c => c.HighRecommand)) //If red is still ok, put BLUE in an random position close to previos RED
             {
                 #region no suggestion
                 int blueCount = blueChestStore.Count;
@@ -550,15 +567,28 @@ namespace MultiThreading
                 Random rdm = new Random();
                 int rdmIndex;
 
-                if (blue3InRowResult.Count == 0)
+                if (blue3InRowResult.Count == 0 && blue2InRowResult.Count != 0 && blue2InRowResult.Any(c => c.HighRecommand))
                 {
-                    rdmIndex = rdm.Next(0, redResult.Count);
-                    PlayGame(redResult[rdmIndex].Location_X, redResult[rdmIndex].Location_Y);
+                    blue2InRowResult = blue2InRowResult.Where(c => c.HighRecommand).ToList();
+                    rdmIndex = rdm.Next(0, blue2InRowResult.Count());
+                    PlayGame(blue2InRowResult[rdmIndex].Location_X, blue2InRowResult[rdmIndex].Location_Y);
+                }
+                else if (blue3InRowResult.Count != 0)
+                {
+                    rdmIndex = rdm.Next(0, blue3InRowResult.Count());
+                    PlayGame(blue3InRowResult[rdmIndex].Location_X, blue3InRowResult[rdmIndex].Location_Y);
+                }
+                else if (redResult.SuggestedChests.Count != 0)
+                {
+                    rdmIndex = rdm.Next(0, redResult.SuggestedChests.Count);
+                    PlayGame(redResult.SuggestedChests[rdmIndex].Location_X,
+                        redResult.SuggestedChests[rdmIndex].Location_Y);
                 }
                 else
                 {
-                    rdmIndex = rdm.Next(0, blue3InRowResult.Count);
-                    PlayGame(blue3InRowResult[rdmIndex].Location_X, blue3InRowResult[rdmIndex].Location_Y);
+                    rdmIndex = rdm.Next(0, red3InRowResult.SuggestedChests.Count);
+                    PlayGame(red3InRowResult.SuggestedChests[rdmIndex].Location_X,
+                       red3InRowResult.SuggestedChests[rdmIndex].Location_Y);
                 }
             }
         }
@@ -570,10 +600,14 @@ namespace MultiThreading
         }
 
         #region Single Direction Check
-        private BreakPointInfo Compare(Chest[] chests, int numToAlert, ref bool isWin)
+        private CompareResult Compare(Chest[] chests, int numToAlert, ref bool isWin)
         {
             int[] arrayInts;
+            
             bool isX = false;
+            CompareResult result = new CompareResult();
+
+            List<Chest> breakPoints = new List<Chest>();
 
             if (chests.Where(c => c.Location_Y == chests[0].Location_Y).Count() == chests.Count())
             {
@@ -587,7 +621,6 @@ namespace MultiThreading
 
             int processedCount = 1;
             int count = numToAlert - 1;
-            BreakPointInfo indexWhereBreaks = new BreakPointInfo();
 
             if (chests.Count() >= numToAlert)
             {
@@ -596,36 +629,151 @@ namespace MultiThreading
                     if (arrayInts[index] - arrayInts[index - 1] == 1)
                     {
                         processedCount++;
+
+                        if (processedCount == 4)
+                        {
+                            bool tempHighRecommand = false;
+
+                            tempHighRecommand = isX
+                                ? CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), arrayInts[0] - 1,
+                                    chests[0].Location_Y)
+                                : CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(),
+                                    chests[0].Location_X, arrayInts[0] - 1);
+
+                            if (tempHighRecommand)
+                            {
+                                Chest suggestChest = isX
+                                ? new Chest
+                                {
+                                    Location_X = arrayInts[0] - 1,
+                                    Location_Y = chests[0].Location_Y,
+                                    HighRecommand = true
+                                }
+                                : new Chest
+                                {
+                                    Location_X = chests[0].Location_X,
+                                    Location_Y = arrayInts[0] - 1,
+                                    HighRecommand = true
+                                };
+
+                                breakPoints.Add(suggestChest);
+                            }
+                        }
+
                         count--;
                         if (count == 0)
                         {
                             isWin = true;
                         }
                     }
-                    else if (arrayInts[index] - arrayInts[index - 1] == 2)
+                    else if (arrayInts[index] - arrayInts[index - 1] == 2) //xx0x
                     {
                         processedCount++;
 
-                        Chest suggestChest = isX ? new Chest { Location_X = arrayInts[index] - 1, Location_Y = chests[0].Location_Y } : new Chest { Location_X = chests[0].Location_X, Location_Y = arrayInts[index] - 1 };
+                        if (processedCount > 2 || (processedCount == 2 && index < arrayInts.Count() - 1 && arrayInts[index + 1] - arrayInts[index] == 1)) //xx0x
+                        {
+                            bool tempHighRecommand = false;
 
-                        bool breakNextPointAvail = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(),
-                            suggestChest.Location_X, suggestChest.Location_Y);
+                            tempHighRecommand = isX
+                                ? CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), arrayInts[0] - 1,
+                                    chests[0].Location_Y)
+                                : CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), chests[0].Location_X, arrayInts[0] - 1);
+                            Chest suggestChest = isX
+                                ? new Chest
+                                {
+                                    Location_X = arrayInts[index] - 1,
+                                    Location_Y = chests[0].Location_Y,
+                                    HighRecommand = tempHighRecommand
+                                }
+                                : new Chest
+                                {
+                                    Location_X = chests[0].Location_X,
+                                    Location_Y = arrayInts[index] - 1,
+                                    HighRecommand = tempHighRecommand
+                                };
 
-                        indexWhereBreaks = breakNextPointAvail ? new BreakPointInfo { Index = index, SuggestChest = suggestChest } : new BreakPointInfo();
+                            bool breakNextPointAvail =
+                                CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(),
+                                    suggestChest.Location_X, suggestChest.Location_Y);
+
+                            if (breakNextPointAvail)
+                            {
+                                breakPoints.Add(suggestChest);
+                            }
+                        }
+                        count = numToAlert - 1;
+                    }
+                    else if (arrayInts[index] - arrayInts[index - 1] == 3) //xx00x
+                    {
+                        processedCount++;
+
+                        bool tempHighRecommand = false;
+
+                        tempHighRecommand = isX
+                            ? CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), arrayInts[0] - 1,
+                                chests[0].Location_Y)
+                            : CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(), chests[0].Location_X, arrayInts[0] - 1);
+
+                        if (processedCount > 2 ||
+                            (processedCount == 2 && index < arrayInts.Count() - 1 &&
+                             arrayInts[index + 1] - arrayInts[index] == 1)) //xx00x || x00xx
+                        {
+                            Chest suggestChest1 = isX
+                                ? new Chest
+                                {
+                                    Location_X = arrayInts[index] - 1,
+                                    Location_Y = chests[0].Location_Y,
+                                    HighRecommand = tempHighRecommand
+                                }
+                                : new Chest
+                                {
+                                    Location_X = chests[0].Location_X,
+                                    Location_Y = arrayInts[index] - 1,
+                                    HighRecommand = tempHighRecommand
+                                };
+                            Chest suggestChest2 = isX
+                                ? new Chest
+                                {
+                                    Location_X = arrayInts[index] - 2,
+                                    Location_Y = chests[0].Location_Y,
+                                    HighRecommand = tempHighRecommand
+                                }
+                                : new Chest
+                                {
+                                    Location_X = chests[0].Location_X,
+                                    Location_Y = arrayInts[index] - 2,
+                                    HighRecommand = tempHighRecommand
+                                };
+
+                            bool breakNextPointAvail1 =
+                                CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(),
+                                    suggestChest1.Location_X, suggestChest1.Location_Y);
+
+                            bool breakNextPointAvail2 = CheckPositionAvailable(redChestStore.Concat(blueChestStore).ToList(),
+                                suggestChest2.Location_X, suggestChest2.Location_Y);
+
+                            if (breakNextPointAvail1 && breakNextPointAvail2)
+                            {
+                                breakPoints.Add(suggestChest1);
+                                breakPoints.Add(suggestChest2);
+                            }
+                        }
                         count = numToAlert - 1;
                     }
                 }
             }
 
-            indexWhereBreaks.ProcessedCount = processedCount;
-            return indexWhereBreaks;
+            result.NumInRow = processedCount;
+            result.SuggestedChests = breakPoints;
+            return result;
         }
 
-        private BreakPointInfo CompareXY(Chest[] chests, int numToAlert, ref bool isWin)
+        private CompareResult CompareXY(Chest[] chests, int numToAlert, ref bool isWin)
         {
             int count = numToAlert - 1;
             int processedCount = 1;
-            BreakPointInfo indexWhereBreaks = new BreakPointInfo();
+            List<Chest> breakPoints = new List<Chest>();
+            CompareResult result = new CompareResult();
 
             string lastStepDirection;
 
@@ -665,41 +813,120 @@ namespace MultiThreading
                         count--;
                         processedCount++;
 
+                        if (processedCount == 4)
+                        {
+                            
+                        }
+
                         if (count == 0)
                         {
                             isWin = true;
                         }
                     }
-                    else if (Math.Abs(stepYDiff) == 2 && Math.Abs(stepXDiff) == 2)
+                    else if (Math.Abs(stepYDiff) == 2 && Math.Abs(stepXDiff) == 2) //xx0x
                     {
                         processedCount++;
 
-                        bool breakNextPointAvail = false;
-                        Chest suggestChest = new Chest();
+                        int stepXDiffTemp, stepYDiffTemp;
+                        bool index1Avail = false;
 
-                        switch (lastStepDirection)
+                        if (index < chests.Count() - 1)
                         {
-                            case "Xy00":
-                                suggestChest.Location_X = chests[routeQueue.Peek()].Location_X + 1;
-                                suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y + 1;
-                                break;
-                            case "Xy01":
-                                suggestChest.Location_X = chests[routeQueue.Peek()].Location_X + 1;
-                                suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y - 1;
-                                break;
-                            case "Xy10":
-                                suggestChest.Location_X = chests[routeQueue.Peek()].Location_X - 1;
-                                suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y + 1;
-                                break;
-                            case "Xy11":
-                                suggestChest.Location_X = chests[routeQueue.Peek()].Location_X - 1;
-                                suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y - 1;
-                                break;
+                            stepXDiffTemp = chests[index + 1].Location_X - chests[index].Location_X;
+                            stepYDiffTemp = chests[index + 1].Location_Y - chests[index].Location_Y;
+                            index1Avail = Math.Abs(stepXDiffTemp) == 1 && Math.Abs(stepYDiffTemp) == 1;
                         }
 
-                        breakNextPointAvail = CheckPositionAvailable(blueChestStore.Concat(redChestStore).ToList(),
-                            suggestChest.Location_X, suggestChest.Location_Y);
-                        indexWhereBreaks = breakNextPointAvail ? new BreakPointInfo { Index = index, SuggestChest = suggestChest } : new BreakPointInfo();
+                        if (processedCount > 2 || (processedCount == 2 && index1Avail)) //xx0x or x0xx
+                        {
+                            bool breakNextPointAvail = false;
+                            Chest suggestChest = new Chest();
+
+                            switch (lastStepDirection)
+                            {
+                                case "Xy00":
+                                    suggestChest.Location_X = chests[routeQueue.Peek()].Location_X + 1;
+                                    suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y + 1;
+                                    suggestChest.HighRecommand = true;
+                                    break;
+                                case "Xy01":
+                                    suggestChest.Location_X = chests[routeQueue.Peek()].Location_X + 1;
+                                    suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y - 1;
+                                    suggestChest.HighRecommand = true;
+                                    break;
+                                case "Xy10":
+                                    suggestChest.Location_X = chests[routeQueue.Peek()].Location_X - 1;
+                                    suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y + 1;
+                                    suggestChest.HighRecommand = true;
+                                    break;
+                                case "Xy11":
+                                    suggestChest.Location_X = chests[routeQueue.Peek()].Location_X - 1;
+                                    suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y - 1;
+                                    suggestChest.HighRecommand = true;
+                                    break;
+                            }
+
+                            breakNextPointAvail = CheckPositionAvailable(blueChestStore.Concat(redChestStore).ToList(),
+                                suggestChest.Location_X, suggestChest.Location_Y);
+
+                            if (breakNextPointAvail)
+                            {
+                                breakPoints.Add(suggestChest);
+                            }
+                        }
+                        count = numToAlert - 1;
+                    }
+                    else if (Math.Abs(stepYDiff) == 3 && Math.Abs(stepXDiff) == 3) //xx00x
+                    {
+                        processedCount++;
+
+                        int stepXDiffTemp, stepYDiffTemp;
+                        bool index1Avail = false;
+
+                        if (index < chests.Count() - 1)
+                        {
+                            stepXDiffTemp = Math.Abs(chests[index + 1].Location_X - chests[index].Location_X);
+                            stepYDiffTemp = Math.Abs(chests[index + 1].Location_Y - chests[index].Location_Y);
+                            index1Avail = stepXDiffTemp == 1 && stepYDiffTemp == 1;
+                        }
+
+                        if (processedCount > 2 || (processedCount == 2 && index1Avail)) //xx00x or x00xx
+                        {
+                            bool breakNextPointAvail = false;
+                            Chest suggestChest = new Chest();
+
+                            switch (lastStepDirection)
+                            {
+                                case "Xy00":
+                                    suggestChest.Location_X = chests[routeQueue.Peek()].Location_X + 2;
+                                    suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y + 2;
+                                    suggestChest.HighRecommand = true;
+                                    break;
+                                case "Xy01":
+                                    suggestChest.Location_X = chests[routeQueue.Peek()].Location_X + 2;
+                                    suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y - 2;
+                                    suggestChest.HighRecommand = true;
+                                    break;
+                                case "Xy10":
+                                    suggestChest.Location_X = chests[routeQueue.Peek()].Location_X - 2;
+                                    suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y + 2;
+                                    suggestChest.HighRecommand = true;
+                                    break;
+                                case "Xy11":
+                                    suggestChest.Location_X = chests[routeQueue.Peek()].Location_X - 2;
+                                    suggestChest.Location_Y = chests[routeQueue.Peek()].Location_Y - 2;
+                                    suggestChest.HighRecommand = true;
+                                    break;
+                            }
+
+                            breakNextPointAvail = CheckPositionAvailable(blueChestStore.Concat(redChestStore).ToList(),
+                                suggestChest.Location_X, suggestChest.Location_Y);
+
+                            if (breakNextPointAvail)
+                            {
+                                breakPoints.Add(suggestChest);
+                            }
+                        }
                         count = numToAlert - 1;
                     }
                     else
@@ -707,18 +934,18 @@ namespace MultiThreading
                         count = numToAlert - 1;
                     }
                 }
-
             }
 
-            indexWhereBreaks.ProcessedCount = processedCount;
-            return indexWhereBreaks;
+            result.NumInRow = processedCount;
+            result.SuggestedChests = breakPoints;
+            return result;
         }
         #endregion
 
         private void InitGame()
         {
             chbOnePlayer.Enabled = true;
-            
+
             btnRegret.Enabled = true;
             this.CreateGraphics().Clear(this.BackColor);
             redTurn = true;
@@ -758,12 +985,12 @@ namespace MultiThreading
 
         private void PaintChest(int x, int y, bool isRedTurn)
         {
-           // SolidBrush solidBrush = isRedTurn ? new SolidBrush(Color.Red) : new SolidBrush(Color.Blue);
-         //   this.CreateGraphics().FillEllipse(solidBrush, rect);
+            // SolidBrush solidBrush = isRedTurn ? new SolidBrush(Color.Red) : new SolidBrush(Color.Blue);
+            //   this.CreateGraphics().FillEllipse(solidBrush, rect);
 
             Rectangle rect = new Rectangle(x + initPositionOffset, y + initPositionOffset, chestSize, chestSize);
             Graphics gfx = this.CreateGraphics();
-            Icon newIcon = isRedTurn ? new Icon(Directory.GetCurrentDirectory() + @"..\..\..\img\furRed.ico") : new Icon(Directory.GetCurrentDirectory() + @"..\..\..\img\catBlue.ico");
+            Icon newIcon = isRedTurn ? new Icon(Directory.GetCurrentDirectory() + @"..\..\..\img\furRed.ico") : new Icon(Directory.GetCurrentDirectory() + @"..\..\..\img\catTied.ico");
             gfx.DrawIcon(newIcon, rect);
         }
 
@@ -771,7 +998,7 @@ namespace MultiThreading
         {
             SolidBrush solidBrush = new SolidBrush(this.BackColor);
 
-            this.CreateGraphics().FillEllipse(solidBrush, new Rectangle(x + initPositionOffset, y + initPositionOffset, chestSize, chestSize));
+            this.CreateGraphics().FillRectangle(solidBrush, new Rectangle(x + initPositionOffset, y + initPositionOffset, chestSize, chestSize));
 
             Point startPointX = new Point(x + initPositionOffset, y + initPositionOffset + chestSize / 2);
             Point endPointX = new Point(x + initPositionOffset + chestSize, y + initPositionOffset + chestSize / 2);
