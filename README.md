@@ -5,3 +5,4 @@ Practices Designing Games with Multithread
 2. Players can regret;
 3. Judge by system.
 4. User can choose to play with computer.
+5. User can select difficulty level.
